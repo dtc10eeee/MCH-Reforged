@@ -1,7 +1,10 @@
 package mcheli.aircraft;
 
 import mcheli.MCH_I18n;
+import mcheli.MCH_Config;
 import mcheli.MCH_PacketIndOpenScreen;
+import mcheli.gui.MCH_GuiOnOffButton;
+import mcheli.plane.MCP_EntityPlane;
 import mcheli.weapon.MCH_WeaponDummy;
 import mcheli.weapon.MCH_WeaponInfo;
 import mcheli.weapon.MCH_WeaponSet;
@@ -23,6 +26,7 @@ public class MCH_AircraftGui extends W_GuiContainer {
     public static final int BUTTON_CLOSE = 4;
     public static final int BUTTON_CONFIG = 5;
     public static final int BUTTON_INVENTORY = 6;
+    public static final int BUTTON_MOUSE_AIM = 7;
     private final EntityPlayer thePlayer;
     private final MCH_EntityAircraft aircraft;
     private int scaleFactor;
@@ -30,6 +34,7 @@ public class MCH_AircraftGui extends W_GuiContainer {
     private GuiButton buttonNext;
     private GuiButton buttonPrev;
     private GuiButton buttonInventory;
+    private MCH_GuiOnOffButton buttonMouseAim;
     private int currentWeaponId;
     private int reloadWait;
     private GuiTextField editCommand;
@@ -55,6 +60,8 @@ public class MCH_AircraftGui extends W_GuiContainer {
         this.buttonNext.enabled = this.aircraft.getWeaponNum() >= 2;
         this.buttonPrev.enabled = this.aircraft.getWeaponNum() >= 2;
         this.buttonInventory = new GuiButton(6, super.guiLeft + 210 - 30 - 60, super.guiTop + 90, 80, 20, MCH_I18n.format("gui.mcheli.inventory"));
+        this.buttonMouseAim = new MCH_GuiOnOffButton(7, super.guiLeft + 210 - 30 - 94, super.guiTop + 130, 114, 20, "Mouse Aim : ");
+        this.buttonMouseAim.setOnOff(MCH_Config.MouseAimPlaneThirdPersonEnabled.prmBool);
         super.buttonList.add(new GuiButton(5, super.guiLeft + 210 - 30 - 60, super.guiTop + 110, 80, 20, MCH_I18n.format("gui.mcheli.mod_options")));
         super.buttonList.add(new GuiButton(4, super.guiLeft + 210 - 30 - 20, super.guiTop + 10, 40, 20, MCH_I18n.format("gui.mcheli.close")));
         super.buttonList.add(this.buttonReload);
@@ -62,6 +69,9 @@ public class MCH_AircraftGui extends W_GuiContainer {
         super.buttonList.add(this.buttonPrev);
         if (this.aircraft != null && this.aircraft.getSizeInventory() > 0) {
             super.buttonList.add(this.buttonInventory);
+        }
+        if (this.aircraft instanceof MCP_EntityPlane) {
+            super.buttonList.add(this.buttonMouseAim);
         }
 
         //this.editCommand = new GuiTextField(super.fontRendererObj, super.guiLeft + 25, super.guiTop + 215, 160, 15);
@@ -140,6 +150,11 @@ public class MCH_AircraftGui extends W_GuiContainer {
                     break;
                 case 6:
                     MCH_PacketIndOpenScreen.send(3);
+                    break;
+                case 7:
+                    if (button instanceof MCH_GuiOnOffButton) {
+                        MCH_Config.MouseAimPlaneThirdPersonEnabled.prmBool = ((MCH_GuiOnOffButton) button).getOnOff();
+                    }
             }
 
         }

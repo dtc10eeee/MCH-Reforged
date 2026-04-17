@@ -63,6 +63,9 @@ public class MCH_CommonPacketHandler {
             MCH_ServerSettings.enableDebugBoundingBox = pkt.enableDebugBoundingBox;
             MCH_ServerSettings.enableDebugGunnerTeam = pkt.enableDebugGunnerTeam;
             MCH_ServerSettings.enableDebugWaypointLabel = pkt.enableDebugWaypointLabel;
+            MCH_ServerSettings.enableDebugMouseAim = pkt.enableDebugMouseAim;
+            MCH_ServerSettings.mouseAimControlProfile = pkt.mouseAimControlProfile;
+            MCH_ServerSettings.enableMouseAimExtendedCircle = pkt.enableMouseAimExtendedCircle;
             MCH_ClientLightWeaponTickHandler.lockRange = MCH_ServerSettings.stingerLockRange;
         }
     }

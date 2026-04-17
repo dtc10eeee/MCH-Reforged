@@ -640,7 +640,7 @@ public class MCH_Math {
     private MCH_Math.FQuat privateNewQuat() {
         MCH_Math.FQuat q = new MCH_Math.FQuat();
         QuatIdentity(q);
-        return new MCH_Math.FQuat();
+        return q;
     }
 
     private MCH_Math.FMatrix privateNewMatrix() {

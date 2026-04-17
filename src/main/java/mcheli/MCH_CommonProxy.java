@@ -92,6 +92,10 @@ public class MCH_CommonProxy {
         return false;
     }
 
+    public int getThirdPersonViewType() {
+        return 0;
+    }
+
     public int getNewRenderType() {
         return -1;
     }

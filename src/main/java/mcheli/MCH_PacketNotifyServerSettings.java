@@ -17,6 +17,9 @@ public class MCH_PacketNotifyServerSettings extends MCH_Packet {
     public boolean enableDebugBoundingBox = true;
     public boolean enableDebugGunnerTeam = false;
     public boolean enableDebugWaypointLabel = false;
+    public boolean enableDebugMouseAim = false;
+    public int mouseAimControlProfile = 0;
+    public boolean enableMouseAimExtendedCircle = false;
 
     public static void send(EntityPlayerMP player) {
         MCH_PacketNotifyServerSettings s = new MCH_PacketNotifyServerSettings();
@@ -31,6 +34,9 @@ public class MCH_PacketNotifyServerSettings extends MCH_Packet {
         s.enableDebugBoundingBox = MCH_Config.EnableDebugBoundingBox.prmBool;
         s.enableDebugGunnerTeam = MCH_ServerSettings.enableDebugGunnerTeam;
         s.enableDebugWaypointLabel = MCH_ServerSettings.enableDebugWaypointLabel;
+        s.enableDebugMouseAim = MCH_ServerSettings.enableDebugMouseAim;
+        s.mouseAimControlProfile = MCH_ServerSettings.mouseAimControlProfile;
+        s.enableMouseAimExtendedCircle = MCH_ServerSettings.enableMouseAimExtendedCircle;
         if (player != null) {
             W_Network.sendToPlayer(s, player);
         } else {
@@ -57,6 +63,9 @@ public class MCH_PacketNotifyServerSettings extends MCH_Packet {
             this.enableDebugBoundingBox = this.getBit(e, 3);
             this.enableDebugGunnerTeam = this.getBit(e, 4);
             this.enableDebugWaypointLabel = this.getBit(e, 5);
+            this.enableDebugMouseAim = this.getBit(e, 6);
+            this.enableMouseAimExtendedCircle = this.getBit(e, 7);
+            this.mouseAimControlProfile = data.readByte();
         } catch (Exception var3) {
             var3.printStackTrace();
         }
@@ -72,8 +81,11 @@ public class MCH_PacketNotifyServerSettings extends MCH_Packet {
             e1 = this.setBit(e1, 3, this.enableDebugBoundingBox);
             e1 = this.setBit(e1, 4, this.enableDebugGunnerTeam);
             e1 = this.setBit(e1, 5, this.enableDebugWaypointLabel);
+            e1 = this.setBit(e1, 6, this.enableDebugMouseAim);
+            e1 = this.setBit(e1, 7, this.enableMouseAimExtendedCircle);
             dos.writeByte(e1);
             dos.writeFloat((float) this.stingerLockRange);
+            dos.writeByte(this.mouseAimControlProfile);
         } catch (IOException var3) {
             var3.printStackTrace();
         }

@@ -12,6 +12,9 @@ public class MCH_ServerSettings {
     public static boolean enableDebugFreeLook = false;
     public static boolean enableDebugWaypointLabel = false;
     public static boolean enableDebugWaypointNav = false;
+    public static boolean enableDebugMouseAim = false;
+    public static int mouseAimControlProfile = 0; // 0=normal, 1=aggressive
+    public static boolean enableMouseAimExtendedCircle = false;
 
 
 }

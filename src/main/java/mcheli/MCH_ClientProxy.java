@@ -613,6 +613,10 @@ public class MCH_ClientProxy extends MCH_CommonProxy {
         return Minecraft.getMinecraft().gameSettings.thirdPersonView == 0;
     }
 
+    public int getThirdPersonViewType() {
+        return Minecraft.getMinecraft().gameSettings.thirdPersonView;
+    }
+
     public int getNewRenderType() {
         return RenderingRegistry.getNextAvailableRenderId();
     }

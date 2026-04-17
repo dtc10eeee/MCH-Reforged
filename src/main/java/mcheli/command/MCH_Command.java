@@ -3,12 +3,16 @@ package mcheli.command;
 import com.google.gson.JsonParseException;
 import mcheli.MCH_Config;
 import mcheli.MCH_FreeLookDebug;
+import mcheli.MCH_MouseAimDebug;
 import mcheli.MCH_WaypointNavDebug;
 import mcheli.MCH_MOD;
 import mcheli.MCH_PacketNotifyServerSettings;
 import mcheli.MCH_ServerSettings;
+import mcheli.aircraft.MCH_AircraftInfo;
+import mcheli.aircraft.MCH_EntityAircraft;
 import mcheli.multiplay.MCH_MultiplayPacketHandler;
 import mcheli.multiplay.MCH_PacketIndClient;
+import mcheli.plane.MCP_EntityPlane;
 import net.minecraft.block.Block;
 import net.minecraft.command.*;
 import net.minecraft.entity.Entity;
@@ -214,15 +218,16 @@ public class MCH_Command extends CommandBase {
                             sender.addChatMessage(new ChatComponentText("Enabled bounding box [F3 + b]"));
                         }
                     } else if (prm[0].equalsIgnoreCase("debug")) {
-                        if (prm.length != 3 || (!prm[1].equalsIgnoreCase("gunner") && !prm[1].equalsIgnoreCase("freelook") && !prm[1].equalsIgnoreCase("waypoint") && !prm[1].equalsIgnoreCase("waypointnav"))) {
-                            throw new CommandException("Parameter error! : /mcheli debug <gunner|freelook|waypoint|waypointnav> true or false", new Object[0]);
+                        if (prm.length != 3 || (!prm[1].equalsIgnoreCase("gunner") && !prm[1].equalsIgnoreCase("freelook") && !prm[1].equalsIgnoreCase("waypoint") && !prm[1].equalsIgnoreCase("waypointnav") && !prm[1].equalsIgnoreCase("mouseaim") && !prm[1].equalsIgnoreCase("mouseaimprofile") && !prm[1].equalsIgnoreCase("mouseaimext"))) {
+                            throw new CommandException("Parameter error! : /mcheli debug <gunner|freelook|waypoint|waypointnav|mouseaim|mouseaimprofile|mouseaimext> <arg>", new Object[0]);
                         }
-                        boolean enabled = parseBoolean(sender, prm[2]);
                         if (prm[1].equalsIgnoreCase("gunner")) {
+                            boolean enabled = parseBoolean(sender, prm[2]);
                             MCH_ServerSettings.enableDebugGunnerTeam = enabled;
                             MCH_PacketNotifyServerSettings.sendAll();
                             sender.addChatMessage(new ChatComponentText("Debug gunner team label: " + (MCH_ServerSettings.enableDebugGunnerTeam ? "ON" : "OFF")));
                         } else if (prm[1].equalsIgnoreCase("freelook")) {
+                            boolean enabled = parseBoolean(sender, prm[2]);
                             MCH_ServerSettings.enableDebugFreeLook = enabled;
                             if (MCH_ServerSettings.enableDebugFreeLook) {
                                 sender.addChatMessage(new ChatComponentText("Debug freelook trace: ON (log: " + MCH_FreeLookDebug.getLogPath() + ")"));
@@ -230,13 +235,87 @@ public class MCH_Command extends CommandBase {
                                 sender.addChatMessage(new ChatComponentText("Debug freelook trace: OFF"));
                             }
                         } else if (prm[1].equalsIgnoreCase("waypointnav")) {
+                            boolean enabled = parseBoolean(sender, prm[2]);
                             MCH_ServerSettings.enableDebugWaypointNav = enabled;
                             if (MCH_ServerSettings.enableDebugWaypointNav) {
                                 sender.addChatMessage(new ChatComponentText("Debug waypoint nav trace: ON (log: " + MCH_WaypointNavDebug.getLogPath() + ")"));
                             } else {
                                 sender.addChatMessage(new ChatComponentText("Debug waypoint nav trace: OFF"));
                             }
+                        } else if (prm[1].equalsIgnoreCase("mouseaim")) {
+                            if (prm[2].equalsIgnoreCase("status")) {
+                                boolean isPlayer = sender instanceof EntityPlayer;
+                                int thirdPerson = MCH_MOD.proxy.getThirdPersonViewType();
+                                boolean configEnabled = MCH_Config.MouseAimPlaneThirdPersonEnabled.prmBool;
+                                boolean pseudoLookEnabled = MCH_Config.MouseAimPlanePseudoFreeLookEnabled.prmBool;
+                                boolean profileAggressive = MCH_ServerSettings.mouseAimControlProfile == 1;
+                                MCH_EntityAircraft ac = isPlayer ? MCH_EntityAircraft.getAircraft_RiddenOrControl((EntityPlayer) sender) : null;
+                                boolean pilotSeat = ac != null && ac.getSeatIdByEntity((Entity) sender) == 0;
+                                boolean isPlane = ac instanceof MCP_EntityPlane;
+                                sender.addChatMessage(new ChatComponentText("[MouseAimStatus] debug=" + (MCH_ServerSettings.enableDebugMouseAim ? "ON" : "OFF")
+                                    + " config=" + (configEnabled ? "ON" : "OFF")
+                                    + " pseudoLook=" + (pseudoLookEnabled ? "ON" : "OFF")
+                                    + " yawLim=" + (int) MCH_Config.MouseAimPlanePseudoFreeLookYawLimit.prmDouble
+                                    + " pitchLim=" + (int) MCH_Config.MouseAimPlanePseudoFreeLookPitchLimit.prmDouble
+                                    + " profile=" + (profileAggressive ? "aggressive" : "normal")
+                                    + " extCircle=" + (MCH_ServerSettings.enableMouseAimExtendedCircle ? "ON" : "OFF")
+                                    + " thirdPersonView=" + thirdPerson
+                                    + " ridingPlane=" + (isPlane ? "YES" : "NO")
+                                    + " pilotSeat=" + (pilotSeat ? "YES" : "NO")));
+                            } else if (prm[2].equalsIgnoreCase("snapshot")) {
+                                if (!(sender instanceof EntityPlayer)) {
+                                    sender.addChatMessage(new ChatComponentText("[MouseAimSnapshot] player command only."));
+                                } else {
+                                    MCH_EntityAircraft ac = MCH_EntityAircraft.getAircraft_RiddenOrControl((EntityPlayer) sender);
+                                    if (!(ac instanceof MCP_EntityPlane)) {
+                                        sender.addChatMessage(new ChatComponentText("[MouseAimSnapshot] not riding plane."));
+                                    } else {
+                                        MCP_EntityPlane plane = (MCP_EntityPlane) ac;
+                                        MCH_AircraftInfo ai = plane.getAcInfo();
+                                        sender.addChatMessage(new ChatComponentText(
+                                            String.format(Locale.ROOT, "[MouseAimSnapshot] active=%s quatActive=%s quatInited=%s quat=(w=%.4f,x=%.4f,y=%.4f,z=%.4f) rot=(yaw=%.2f,pitch=%.2f,roll=%.2f) speed=%.3f throttle=%.3f mobility=(yaw=%.2f,pitch=%.2f,roll=%.2f)",
+                                                plane.isWTMouseAimActive(),
+                                                plane.isWTQuaternionAnglesActive(),
+                                                plane.isWTQuatInited(),
+                                                plane.getWTQuatW(),
+                                                plane.getWTQuatX(),
+                                                plane.getWTQuatY(),
+                                                plane.getWTQuatZ(),
+                                                plane.getRotYaw(), plane.getRotPitch(), plane.getRotRoll(),
+                                                plane.currentSpeed, plane.getCurrentThrottle(),
+                                                ai != null ? ai.mobilityYaw : 0.0F,
+                                                ai != null ? ai.mobilityPitch : 0.0F,
+                                                ai != null ? ai.mobilityRoll : 0.0F
+                                            )
+                                        ));
+                                    }
+                                }
+                            } else {
+                                boolean enabled = parseBoolean(sender, prm[2]);
+                                MCH_ServerSettings.enableDebugMouseAim = enabled;
+                                MCH_PacketNotifyServerSettings.sendAll();
+                                if (MCH_ServerSettings.enableDebugMouseAim) {
+                                    Entity actor = sender instanceof Entity ? (Entity) sender : null;
+                                    MCH_MouseAimDebug.trace(sender.getEntityWorld(), actor, "[Switch] mouse aim debug enabled by %s", sender.getCommandSenderName());
+                                    sender.addChatMessage(new ChatComponentText("Debug mouse aim trace: ON (log: " + MCH_MouseAimDebug.getLogPath() + ")"));
+                                } else {
+                                    sender.addChatMessage(new ChatComponentText("Debug mouse aim trace: OFF"));
+                                }
+                            }
+                        } else if (prm[1].equalsIgnoreCase("mouseaimprofile")) {
+                            if (!prm[2].equalsIgnoreCase("normal") && !prm[2].equalsIgnoreCase("aggressive")) {
+                                throw new CommandException("Parameter error! : /mcheli debug mouseaimprofile <normal|aggressive>", new Object[0]);
+                            }
+                            MCH_ServerSettings.mouseAimControlProfile = prm[2].equalsIgnoreCase("aggressive") ? 1 : 0;
+                            MCH_PacketNotifyServerSettings.sendAll();
+                            sender.addChatMessage(new ChatComponentText("Mouse aim profile: " + (MCH_ServerSettings.mouseAimControlProfile == 1 ? "aggressive" : "normal")));
+                        } else if (prm[1].equalsIgnoreCase("mouseaimext")) {
+                            boolean enabled = parseBoolean(sender, prm[2]);
+                            MCH_ServerSettings.enableMouseAimExtendedCircle = enabled;
+                            MCH_PacketNotifyServerSettings.sendAll();
+                            sender.addChatMessage(new ChatComponentText("Mouse aim extended circle placeholder: " + (enabled ? "ON" : "OFF")));
                         } else {
+                            boolean enabled = parseBoolean(sender, prm[2]);
                             MCH_ServerSettings.enableDebugWaypointLabel = enabled;
                             MCH_PacketNotifyServerSettings.sendAll();
                             sender.addChatMessage(new ChatComponentText("Debug waypoint label: " + (MCH_ServerSettings.enableDebugWaypointLabel ? "ON" : "OFF")));
@@ -578,9 +657,18 @@ public class MCH_Command extends CommandBase {
                     return getListOfStringsMatchingLastWord(prm, new String[]{"true", "false"});
                 } else if (prm[0].equalsIgnoreCase("debug")) {
                     if (prm.length == 2) {
-                        return getListOfStringsMatchingLastWord(prm, new String[]{"gunner", "freelook", "waypoint", "waypointnav"});
+                        return getListOfStringsMatchingLastWord(prm, new String[]{"gunner", "freelook", "waypoint", "waypointnav", "mouseaim", "mouseaimprofile", "mouseaimext"});
                     }
                     if (prm.length == 3 && (prm[1].equalsIgnoreCase("gunner") || prm[1].equalsIgnoreCase("freelook") || prm[1].equalsIgnoreCase("waypoint") || prm[1].equalsIgnoreCase("waypointnav"))) {
+                        return getListOfStringsMatchingLastWord(prm, new String[]{"true", "false"});
+                    }
+                    if (prm.length == 3 && prm[1].equalsIgnoreCase("mouseaim")) {
+                        return getListOfStringsMatchingLastWord(prm, new String[]{"true", "false", "status", "snapshot"});
+                    }
+                    if (prm.length == 3 && prm[1].equalsIgnoreCase("mouseaimprofile")) {
+                        return getListOfStringsMatchingLastWord(prm, new String[]{"normal", "aggressive"});
+                    }
+                    if (prm.length == 3 && prm[1].equalsIgnoreCase("mouseaimext")) {
                         return getListOfStringsMatchingLastWord(prm, new String[]{"true", "false"});
                     }
                 }

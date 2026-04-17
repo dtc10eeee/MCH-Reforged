@@ -5,6 +5,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import io.netty.buffer.ByteBuf;
 import mcheli.*;
+import mcheli.plane.MCP_EntityPlane;
 import mcheli.chain.MCH_EntityChain;
 import mcheli.command.MCH_Command;
 import mcheli.event.AircraftDamageEvent;
@@ -1595,16 +1596,24 @@ public abstract class MCH_EntityAircraft extends W_EntityContainer implements MC
             roll = roll * this.getRollFactor() * 0.06F * partialTicks;
         }
 
-        MCH_Math.FMatrix m_add1 = MCH_Math.newMatrix();
-        MCH_Math.MatTurnZ(m_add1, roll / 180.0F * 3.1415927F);
-        MCH_Math.MatTurnX(m_add1, pitch / 180.0F * 3.1415927F);
-        MCH_Math.MatTurnY(m_add1, yaw / 180.0F * 3.1415927F);
-        MCH_Math.MatTurnZ(m_add1, (float) ((double) (this.getRotRoll() / 180.0F) * 3.141592653589793D));
-        MCH_Math.MatTurnX(m_add1, (float) ((double) (this.getRotPitch() / 180.0F) * 3.141592653589793D));
-        MCH_Math.MatTurnY(m_add1, (float) ((double) (this.getRotYaw() / 180.0F) * 3.141592653589793D));
-        MCH_Math.FVector3D v = MCH_Math.MatrixToEuler(m_add1);
+        boolean wtQuatAngles = this instanceof MCP_EntityPlane && ((MCP_EntityPlane) this).isWTQuaternionAnglesActive();
+        MCH_Math.FVector3D v;
+        if (wtQuatAngles) {
+            v = ((MCP_EntityPlane) this).computeWTQuaternionEuler(yaw, pitch, roll);
+        } else {
+            MCH_Math.FMatrix m_add1 = MCH_Math.newMatrix();
+            MCH_Math.MatTurnZ(m_add1, roll / 180.0F * 3.1415927F);
+            MCH_Math.MatTurnX(m_add1, pitch / 180.0F * 3.1415927F);
+            MCH_Math.MatTurnY(m_add1, yaw / 180.0F * 3.1415927F);
+            MCH_Math.MatTurnZ(m_add1, (float) ((double) (this.getRotRoll() / 180.0F) * 3.141592653589793D));
+            MCH_Math.MatTurnX(m_add1, (float) ((double) (this.getRotPitch() / 180.0F) * 3.141592653589793D));
+            MCH_Math.MatTurnY(m_add1, (float) ((double) (this.getRotYaw() / 180.0F) * 3.141592653589793D));
+            v = MCH_Math.MatrixToEuler(m_add1);
+        }
         if (this.getAcInfo().limitRotation) {
-            v.x = MCH_Lib.RNG(v.x, this.getAcInfo().minRotationPitch, this.getAcInfo().maxRotationPitch);
+            if (!wtQuatAngles) {
+                v.x = MCH_Lib.RNG(v.x, this.getAcInfo().minRotationPitch, this.getAcInfo().maxRotationPitch);
+            }
             v.z = MCH_Lib.RNG(v.z, this.getAcInfo().minRotationRoll, this.getAcInfo().maxRotationRoll);
         }
 
@@ -1621,9 +1630,11 @@ public abstract class MCH_EntityAircraft extends W_EntityContainer implements MC
         this.setRotRoll(v.z);
         this.onUpdateAngles(partialTicks);
         if (this.getAcInfo().limitRotation) {
-            v.x = MCH_Lib.RNG(this.getRotPitch(), this.getAcInfo().minRotationPitch, this.getAcInfo().maxRotationPitch);
+            if (!wtQuatAngles) {
+                v.x = MCH_Lib.RNG(this.getRotPitch(), this.getAcInfo().minRotationPitch, this.getAcInfo().maxRotationPitch);
+                this.setRotPitch(v.x);
+            }
             v.z = MCH_Lib.RNG(this.getRotRoll(), this.getAcInfo().minRotationRoll, this.getAcInfo().maxRotationRoll);
-            this.setRotPitch(v.x);
             this.setRotRoll(v.z);
         }
 
@@ -1645,30 +1656,41 @@ public abstract class MCH_EntityAircraft extends W_EntityContainer implements MC
         if (this.getRidingEntity() == null) {
             super.prevRotationYaw = this.getRotYaw();
         }
+        float pseudoCamYawOffset = 0.0F;
+        float pseudoCamPitchOffset = 0.0F;
+        if (this instanceof MCP_EntityPlane) {
+            MCP_EntityPlane plane = (MCP_EntityPlane) this;
+            if (plane.isWTPseudoFreeLookCameraActive()) {
+                pseudoCamYawOffset = plane.getWTCameraYawOffset();
+                pseudoCamPitchOffset = plane.getWTCameraPitchOffset();
+            }
+        }
+        float targetPlayerYaw = this.getRotYaw() + (fixRot ? fixYaw : 0.0F) + pseudoCamYawOffset;
+        float targetPlayerPitch = this.getRotPitch() + (fixRot ? fixPitch : 0.0F) + pseudoCamPitchOffset;
 
         if (!this.isOverridePlayerYaw() && !fixRot) {
             player.setAngles(deltaX, 0.0F);
         } else {
             if (this.getRidingEntity() == null) {
-                player.prevRotationYaw = this.getRotYaw() + (fixRot ? fixYaw : 0.0F);
+                player.prevRotationYaw = targetPlayerYaw;
             } else {
-                if (this.getRotYaw() - player.rotationYaw > 180.0F) {
+                if (targetPlayerYaw - player.rotationYaw > 180.0F) {
                     player.prevRotationYaw += 360.0F;
                 }
 
-                if (this.getRotYaw() - player.rotationYaw < -180.0F) {
+                if (targetPlayerYaw - player.rotationYaw < -180.0F) {
                     player.prevRotationYaw -= 360.0F;
                 }
             }
 
-            player.rotationYaw = this.getRotYaw() + (fixRot ? fixYaw : 0.0F);
+            player.rotationYaw = targetPlayerYaw;
         }
 
         if (!this.isOverridePlayerPitch() && !fixRot) {
             player.setAngles(0.0F, deltaY);
         } else {
-            player.prevRotationPitch = this.getRotPitch() + (fixRot ? fixPitch : 0.0F);
-            player.rotationPitch = this.getRotPitch() + (fixRot ? fixPitch : 0.0F);
+            player.prevRotationPitch = targetPlayerPitch;
+            player.rotationPitch = targetPlayerPitch;
         }
 
         if (this.getRidingEntity() == null && ac_yaw != this.getRotYaw() || ac_pitch != this.getRotPitch() || ac_roll != this.getRotRoll()) {
@@ -3842,7 +3864,15 @@ public abstract class MCH_EntityAircraft extends W_EntityContainer implements MC
                 if (var12 != null && var12.rotSeat) {
                     v = this.calcOnTurretPos(var13.pos);
                 } else {
-                    v = MCH_Lib.RotVec3(var13.pos, -this.getRotYaw(), -this.getRotPitch(), -this.getRotRoll());
+                    float camRoll = this.getRotRoll();
+                    if (this instanceof MCP_EntityPlane && MCH_MOD.proxy.getThirdPersonViewType() == 1) {
+                        MCP_EntityPlane plane = (MCP_EntityPlane) this;
+                        if (plane.isWTMouseAimActive()) {
+                            // Third-person readability: keep partial roll follow so aircraft bank is visible.
+                            camRoll *= 0.35F;
+                        }
+                    }
+                    v = MCH_Lib.RotVec3(var13.pos, -this.getRotYaw(), -this.getRotPitch(), -camRoll);
                 }
 
                 MCH_ViewEntityDummy.setCameraPosition(x + v.xCoord, y + v.yCoord, z + v.zCoord);

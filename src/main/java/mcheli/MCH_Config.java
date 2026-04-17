@@ -139,6 +139,11 @@ public class MCH_Config {
     public static MCH_ConfigPrm MouseControlStickModeHeli;
     public static MCH_ConfigPrm MouseControlStickModePlane;
     public static MCH_ConfigPrm MouseControlFlightSimMode;
+    public static MCH_ConfigPrm MouseAimPlaneThirdPersonEnabled;
+    public static MCH_ConfigPrm MouseAimPlaneDrawCircles;
+    public static MCH_ConfigPrm MouseAimPlanePseudoFreeLookEnabled;
+    public static MCH_ConfigPrm MouseAimPlanePseudoFreeLookYawLimit;
+    public static MCH_ConfigPrm MouseAimPlanePseudoFreeLookPitchLimit;
     public static MCH_ConfigPrm SwitchWeaponWithMouseWheel;
     public static MCH_ConfigPrm AllPlaneSpeed;
     public static MCH_ConfigPrm AllHeliSpeed;
@@ -330,6 +335,16 @@ public class MCH_Config {
         MouseControlStickModePlane = new MCH_ConfigPrm("MouseControlStickModePlane", false);
         MouseControlFlightSimMode = new MCH_ConfigPrm("MouseControlFlightSimMode", false);
         MouseControlFlightSimMode.desc = ";MouseControlFlightSimMode = true ( Yaw:key, Roll=mouse )";
+        MouseAimPlaneThirdPersonEnabled = new MCH_ConfigPrm("MouseAimPlaneThirdPersonEnabled", false);
+        MouseAimPlaneThirdPersonEnabled.desc = ";Enable WT-style mouse aim for plane pilot only when thirdPersonView == 1";
+        MouseAimPlaneDrawCircles = new MCH_ConfigPrm("MouseAimPlaneDrawCircles", true);
+        MouseAimPlaneDrawCircles.desc = ";Draw two mouse-aim circles when MouseAimPlaneThirdPersonEnabled is active";
+        MouseAimPlanePseudoFreeLookEnabled = new MCH_ConfigPrm("MouseAimPlanePseudoFreeLookEnabled", true);
+        MouseAimPlanePseudoFreeLookEnabled.desc = ";Pseudo free-look in mouse-aim mode (does not enable FreeLook control lock)";
+        MouseAimPlanePseudoFreeLookYawLimit = new MCH_ConfigPrm("MouseAimPlanePseudoFreeLookYawLimit", 55.0D);
+        MouseAimPlanePseudoFreeLookYawLimit.desc = ";Max pseudo free-look yaw offset in degrees";
+        MouseAimPlanePseudoFreeLookPitchLimit = new MCH_ConfigPrm("MouseAimPlanePseudoFreeLookPitchLimit", 24.0D);
+        MouseAimPlanePseudoFreeLookPitchLimit.desc = ";Max pseudo free-look pitch offset in degrees";
         SwitchWeaponWithMouseWheel = new MCH_ConfigPrm("SwitchWeaponWithMouseWheel", true);
         AllHeliSpeed = new MCH_ConfigPrm("AllHeliSpeed", 1.0D);
         AllPlaneSpeed = new MCH_ConfigPrm("AllPlaneSpeed", 1.0D);
@@ -408,7 +423,7 @@ public class MCH_Config {
         ItemID_StingerMissile = new MCH_ConfigPrm("ItemID_StingerMissile", 28901);
         BlockID_DraftingTableOFF = new MCH_ConfigPrm("BlockID_DraftingTable", 3450);
         BlockID_DraftingTableON = new MCH_ConfigPrm("BlockID_DraftingTableON", 3451);
-        General = new MCH_ConfigPrm[]{TestMode, EnableCommand, null, PlaceableOnSpongeOnly, ItemDamage, ItemFuel, AutoRepairHP, Explosion_DestroyBlock, Explosion_FlamingBlock, BulletBreakableBlock, Collision_DestroyBlock, Collision_Car_BreakableBlock, Collision_Car_BreakableMaterial, Collision_Tank_BreakableBlock, Collision_Tank_BreakableMaterial, Collision_EntityDamage, Collision_EntityTankDamage, InfinityAmmo, InfinityFuel, DismountAll, MountMinecartHeli, MountMinecartPlane, MountMinecartVehicle, MountMinecartTank, PreventingBroken, DropItemInCreativeMode, BreakableOnlyPickaxe, AllHeliSpeed, AllPlaneSpeed, AllTankSpeed, HurtResistantTime, StingerLockRange, delayrangeloader, bombletloader, wrenchdropitem, RangeFinderSpotDist, RangeFinderSpotTime, RangeFinderConsume, EnablePutRackInFlying, EnableDebugBoundingBox, null, InvertMouse, MouseSensitivity, MouseControlStickModeHeli, MouseControlStickModePlane, MouseControlFlightSimMode, AutoThrottleDownHeli, AutoThrottleDownPlane, AutoThrottleDownTank, SwitchWeaponWithMouseWheel, LWeaponAutoFire, DisableItemRender, HideKeybind, RenderDistanceWeight, MobRenderDistanceWeight, CreativeTabIcon, CreativeTabIconHeli, CreativeTabIconPlane, CreativeTabIconTank, CreativeTabIconVehicle, DisableShader, DefaultExplosionParticle, AliveTimeOfCartridge, HitMarkColor, HitBoxDelayTick, GunnerPlaneSearchRadiusAir, GunnerPlaneSearchRadiusGround, GunnerPlaneSearchAltitudeWindow, GunnerPlaneStateSearchMin, GunnerPlaneStateSearchMax, GunnerPlaneStateFocusMin, GunnerPlaneStateFocusMax, GunnerPlaneStateAttackMin, GunnerPlaneStateAttackMax, GunnerPlaneStateDisengageMin, GunnerPlaneStateDisengageMax, SmoothShading, EnableModEntityRender, DisableRenderLivingSpecials, DisplayHUDThirdPerson, DisableCameraDistChange, EnableReplaceTextureManager, DisplayEntityMarker, EntityMarkerSize, BlockMarkerSize, ReplaceRenderViewEntity, null, ItemRecipe_Fuel, ItemRecipe_GLTD, ItemRecipe_Chain, ItemRecipe_Parachute, ItemRecipe_Container, ItemRecipe_UavStation[0], ItemRecipe_UavStation[1], ItemRecipe_DraftingTable, ItemRecipe_Wrench, ItemRecipe_RangeFinder, ItemRecipe_Stinger, ItemRecipe_StingerMissile, ItemRecipe_Javelin, ItemRecipe_JavelinMissile, ItemRecipe_Rpg, ItemRecipe_RpgMissile};
+        General = new MCH_ConfigPrm[]{TestMode, EnableCommand, null, PlaceableOnSpongeOnly, ItemDamage, ItemFuel, AutoRepairHP, Explosion_DestroyBlock, Explosion_FlamingBlock, BulletBreakableBlock, Collision_DestroyBlock, Collision_Car_BreakableBlock, Collision_Car_BreakableMaterial, Collision_Tank_BreakableBlock, Collision_Tank_BreakableMaterial, Collision_EntityDamage, Collision_EntityTankDamage, InfinityAmmo, InfinityFuel, DismountAll, MountMinecartHeli, MountMinecartPlane, MountMinecartVehicle, MountMinecartTank, PreventingBroken, DropItemInCreativeMode, BreakableOnlyPickaxe, AllHeliSpeed, AllPlaneSpeed, AllTankSpeed, HurtResistantTime, StingerLockRange, delayrangeloader, bombletloader, wrenchdropitem, RangeFinderSpotDist, RangeFinderSpotTime, RangeFinderConsume, EnablePutRackInFlying, EnableDebugBoundingBox, null, InvertMouse, MouseSensitivity, MouseControlStickModeHeli, MouseControlStickModePlane, MouseControlFlightSimMode, MouseAimPlaneThirdPersonEnabled, MouseAimPlaneDrawCircles, MouseAimPlanePseudoFreeLookEnabled, MouseAimPlanePseudoFreeLookYawLimit, MouseAimPlanePseudoFreeLookPitchLimit, AutoThrottleDownHeli, AutoThrottleDownPlane, AutoThrottleDownTank, SwitchWeaponWithMouseWheel, LWeaponAutoFire, DisableItemRender, HideKeybind, RenderDistanceWeight, MobRenderDistanceWeight, CreativeTabIcon, CreativeTabIconHeli, CreativeTabIconPlane, CreativeTabIconTank, CreativeTabIconVehicle, DisableShader, DefaultExplosionParticle, AliveTimeOfCartridge, HitMarkColor, HitBoxDelayTick, GunnerPlaneSearchRadiusAir, GunnerPlaneSearchRadiusGround, GunnerPlaneSearchAltitudeWindow, GunnerPlaneStateSearchMin, GunnerPlaneStateSearchMax, GunnerPlaneStateFocusMin, GunnerPlaneStateFocusMax, GunnerPlaneStateAttackMin, GunnerPlaneStateAttackMax, GunnerPlaneStateDisengageMin, GunnerPlaneStateDisengageMax, SmoothShading, EnableModEntityRender, DisableRenderLivingSpecials, DisplayHUDThirdPerson, DisableCameraDistChange, EnableReplaceTextureManager, DisplayEntityMarker, EntityMarkerSize, BlockMarkerSize, ReplaceRenderViewEntity, null, ItemRecipe_Fuel, ItemRecipe_GLTD, ItemRecipe_Chain, ItemRecipe_Parachute, ItemRecipe_Container, ItemRecipe_UavStation[0], ItemRecipe_UavStation[1], ItemRecipe_DraftingTable, ItemRecipe_Wrench, ItemRecipe_RangeFinder, ItemRecipe_Stinger, ItemRecipe_StingerMissile, ItemRecipe_Javelin, ItemRecipe_JavelinMissile, ItemRecipe_Rpg, ItemRecipe_RpgMissile};
         DamageVsEntity = new MCH_Config.DamageFactor("DamageVsEntity");
         DamageVsLiving = new MCH_Config.DamageFactor("DamageVsLiving");
         DamageVsPlayer = new MCH_Config.DamageFactor("DamageVsPlayer");

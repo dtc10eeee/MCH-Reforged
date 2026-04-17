@@ -4,6 +4,10 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import mcheli.MCH_Config;
 import mcheli.MCH_Lib;
+import mcheli.MCH_Math;
+import mcheli.MCH_MouseAimDebug;
+import mcheli.MCH_MOD;
+import mcheli.MCH_ServerSettings;
 import mcheli.aircraft.MCH_AircraftInfo;
 import mcheli.aircraft.MCH_EntityAircraft;
 import mcheli.aircraft.MCH_PacketStatusRequest;
@@ -42,6 +46,38 @@ public class MCP_EntityPlane extends MCH_EntityAircraft {
     public float rotationExhaustFlameX;
     public float rotationExhaustFlameY;
     public float rotationExhaustFlameZ;
+    @SideOnly(Side.CLIENT)
+    private float wtAimNormX;
+    @SideOnly(Side.CLIENT)
+    private float wtAimNormY;
+    @SideOnly(Side.CLIENT)
+    private float wtAimTargetX;
+    @SideOnly(Side.CLIENT)
+    private float wtAimTargetY;
+    @SideOnly(Side.CLIENT)
+    private float wtAimVelX;
+    @SideOnly(Side.CLIENT)
+    private float wtAimVelY;
+    @SideOnly(Side.CLIENT)
+    private float wtYawCmd;
+    @SideOnly(Side.CLIENT)
+    private float wtPitchCmd;
+    @SideOnly(Side.CLIENT)
+    private float wtRollCmd;
+    @SideOnly(Side.CLIENT)
+    private float wtCamYawOffset;
+    @SideOnly(Side.CLIENT)
+    private float wtCamPitchOffset;
+    private float wtQuatW = 1.0F;
+    private float wtQuatX = 0.0F;
+    private float wtQuatY = 0.0F;
+    private float wtQuatZ = 0.0F;
+    private boolean wtQuatInited = false;
+    private float wtQuatPrevYaw = 0.0F;
+    private float wtQuatPrevPitch = 0.0F;
+    private float wtQuatPrevRoll = 0.0F;
+    @SideOnly(Side.CLIENT)
+    private int wtLastControlTick = -1;
 
     @SideOnly(Side.CLIENT)
     public ExhaustAnimState exhaustAnimState;
@@ -231,16 +267,25 @@ public class MCP_EntityPlane extends MCH_EntityAircraft {
 
     public float getYawFactor() {
         float yaw = this.getVtolMode() > 0 ? this.getPlaneInfo().vtolYaw : super.getYawFactor();
+        if (this.isWTMouseAimActive()) {
+            return yaw * 1.9F;
+        }
         return yaw * 0.8F;
     }
 
     public float getPitchFactor() {
         float pitch = this.getVtolMode() > 0 ? this.getPlaneInfo().vtolPitch : super.getPitchFactor();
+        if (this.isWTMouseAimActive()) {
+            return pitch * 1.8F;
+        }
         return pitch * 0.8F;
     }
 
     public float getRollFactor() {
         float roll = this.getVtolMode() > 0 ? this.getPlaneInfo().vtolYaw : super.getRollFactor();
+        if (this.isWTMouseAimActive()) {
+            return roll * 2.4F;
+        }
         return roll * 0.8F;
     }
 
@@ -253,6 +298,11 @@ public class MCP_EntityPlane extends MCH_EntityAircraft {
     }
 
     public float getControlRotYaw(float mouseX, float mouseY, float tick) {
+        if (this.isWTMouseAimActive()) {
+            this.updateWTMouseAimControl(mouseX, mouseY, tick);
+            return this.wtYawCmd;
+        }
+        this.resetWTMouseAimState();
         if (MCH_Config.MouseControlFlightSimMode.prmBool) {
             this.rotationByKey(tick);
             return this.addkeyRotValue * 20.0F;
@@ -262,11 +312,411 @@ public class MCP_EntityPlane extends MCH_EntityAircraft {
     }
 
     public float getControlRotPitch(float mouseX, float mouseY, float tick) {
+        if (this.isWTMouseAimActive()) {
+            this.updateWTMouseAimControl(mouseX, mouseY, tick);
+            return this.wtPitchCmd;
+        }
+        this.resetWTMouseAimState();
         return mouseY;
     }
 
     public float getControlRotRoll(float mouseX, float mouseY, float tick) {
+        if (this.isWTMouseAimActive()) {
+            this.updateWTMouseAimControl(mouseX, mouseY, tick);
+            return this.wtRollCmd;
+        }
+        this.resetWTMouseAimState();
         return MCH_Config.MouseControlFlightSimMode.prmBool ? mouseX * 2.0F : (this.getVtolMode() == 0 ? mouseX * 0.5F : mouseX);
+    }
+
+    public boolean isWTMouseAimActive() {
+        if (!super.worldObj.isRemote) {
+            return false;
+        }
+        if (!MCH_Config.MouseAimPlaneThirdPersonEnabled.prmBool) {
+            return false;
+        }
+        if (!(this.getRiddenByEntity() instanceof EntityPlayer) || !this.isPilot(this.getRiddenByEntity())) {
+            return false;
+        }
+        return MCH_MOD.proxy.getThirdPersonViewType() == 1;
+    }
+
+    @SideOnly(Side.CLIENT)
+    public float getWTAimNormX() {
+        return this.wtAimNormX;
+    }
+
+    @SideOnly(Side.CLIENT)
+    public float getWTAimNormY() {
+        return this.wtAimNormY;
+    }
+
+    @SideOnly(Side.CLIENT)
+    public float getWTAimTargetX() {
+        return this.wtAimTargetX;
+    }
+
+    @SideOnly(Side.CLIENT)
+    public float getWTAimTargetY() {
+        return this.wtAimTargetY;
+    }
+
+    @SideOnly(Side.CLIENT)
+    public boolean isWTPseudoFreeLookCameraActive() {
+        return this.isWTMouseAimActive() && !this.isFreeLookMode() && MCH_Config.MouseAimPlanePseudoFreeLookEnabled.prmBool;
+    }
+
+    @SideOnly(Side.CLIENT)
+    public float getWTCameraYawOffset() {
+        return this.wtCamYawOffset;
+    }
+
+    @SideOnly(Side.CLIENT)
+    public float getWTCameraPitchOffset() {
+        return this.wtCamPitchOffset;
+    }
+
+    public boolean isWTQuaternionAnglesActive() {
+        if (super.worldObj.isRemote) {
+            return this.isWTMouseAimActive();
+        }
+        if (!(this.getRiddenByEntity() instanceof EntityPlayer)) {
+            return false;
+        }
+        return this.isPilot(this.getRiddenByEntity()) && MCH_Config.MouseAimPlaneThirdPersonEnabled.prmBool;
+    }
+
+    public MCH_Math.FVector3D computeWTQuaternionEuler(float yaw, float pitch, float roll) {
+        if (!this.wtQuatInited) {
+            MCH_Math.FQuat q0 = MCH_Math.EulerToQuat(this.getRotYaw(), this.getRotPitch(), this.getRotRoll());
+            this.wtQuatW = q0.w;
+            this.wtQuatX = q0.x;
+            this.wtQuatY = q0.y;
+            this.wtQuatZ = q0.z;
+            this.wtQuatInited = true;
+            this.wtQuatPrevYaw = this.getRotYaw();
+            this.wtQuatPrevPitch = this.getRotPitch();
+            this.wtQuatPrevRoll = this.getRotRoll();
+        }
+
+        MCH_Math.FQuat qCur = MCH_Math.newQuat();
+        qCur.w = this.wtQuatW;
+        qCur.x = this.wtQuatX;
+        qCur.y = this.wtQuatY;
+        qCur.z = this.wtQuatZ;
+        MCH_Math.FQuat dq = MCH_Math.EulerToQuat(yaw, pitch, roll);
+        MCH_Math.FQuat qNext = MCH_Math.QuatMult(dq, qCur);
+        MCH_Math.QuatNormalize(qNext);
+
+        MCH_Math.FVector3D raw = MCH_Math.QuatToEuler(qNext);
+        float c1Pitch = this.unwrapAngleNear(raw.x, this.wtQuatPrevPitch);
+        float c1Yaw = this.unwrapAngleNear(raw.y, this.wtQuatPrevYaw);
+        float c1Roll = this.unwrapAngleNear(raw.z, this.wtQuatPrevRoll);
+
+        float altPitch = raw.x >= 0.0F ? 180.0F - raw.x : -180.0F - raw.x;
+        float altYaw = MathHelper.wrapAngleTo180_float(raw.y + 180.0F);
+        float altRoll = MathHelper.wrapAngleTo180_float(raw.z + 180.0F);
+        float c2Pitch = this.unwrapAngleNear(altPitch, this.wtQuatPrevPitch);
+        float c2Yaw = this.unwrapAngleNear(altYaw, this.wtQuatPrevYaw);
+        float c2Roll = this.unwrapAngleNear(altRoll, this.wtQuatPrevRoll);
+
+        float predPitch = this.wtQuatPrevPitch + pitch;
+        boolean chooseAlt = MathHelper.abs(c2Pitch - predPitch) < MathHelper.abs(c1Pitch - predPitch);
+        // Near Euler singularity, prefer the branch that keeps moving pitch outward
+        // instead of converting most motion into yaw/roll spin.
+        float prevPitchAbs = MathHelper.abs(this.wtQuatPrevPitch);
+        float pitchIntentAbs = MathHelper.abs(pitch);
+        if (prevPitchAbs > 72.0F && pitchIntentAbs > 0.06F) {
+            float outwardSign = this.wtQuatPrevPitch >= 0.0F ? 1.0F : -1.0F;
+            boolean pushingOutward = pitch * outwardSign > 0.0F;
+            if (pushingOutward) {
+                float c1Outward = c1Pitch * outwardSign;
+                float c2Outward = c2Pitch * outwardSign;
+                if (c2Outward > c1Outward + 0.6F) {
+                    chooseAlt = true;
+                }
+            }
+        }
+        float outPitch = chooseAlt ? c2Pitch : c1Pitch;
+        float outYaw = chooseAlt ? c2Yaw : c1Yaw;
+        float outRoll = chooseAlt ? c2Roll : c1Roll;
+
+        this.wtQuatW = qNext.w;
+        this.wtQuatX = qNext.x;
+        this.wtQuatY = qNext.y;
+        this.wtQuatZ = qNext.z;
+        this.wtQuatPrevYaw = outYaw;
+        this.wtQuatPrevPitch = outPitch;
+        this.wtQuatPrevRoll = outRoll;
+
+        return MCH_Math.newVec3D(outPitch, outYaw, outRoll);
+    }
+
+    private float unwrapAngleNear(float angle, float reference) {
+        return reference + MathHelper.wrapAngleTo180_float(angle - reference);
+    }
+
+    public boolean isWTQuatInited() {
+        return this.wtQuatInited;
+    }
+
+    public float getWTQuatW() {
+        return this.wtQuatW;
+    }
+
+    public float getWTQuatX() {
+        return this.wtQuatX;
+    }
+
+    public float getWTQuatY() {
+        return this.wtQuatY;
+    }
+
+    public float getWTQuatZ() {
+        return this.wtQuatZ;
+    }
+
+    @SideOnly(Side.CLIENT)
+    private void updateWTMouseAimControl(float mouseX, float mouseY, float partialTicks) {
+        if (super.ticksExisted == this.wtLastControlTick) {
+            return;
+        }
+        this.wtLastControlTick = super.ticksExisted;
+        boolean aggressiveProfile = MCH_ServerSettings.mouseAimControlProfile == 1;
+        float baseSpeed = 0.07F;
+        float speedNow = Math.max((float) super.currentSpeed, (float) Math.sqrt(super.motionX * super.motionX + super.motionZ * super.motionZ));
+        float speedMax = Math.max(this.getMaxSpeed(), baseSpeed + 0.01F);
+        float speedNorm = MathHelper.clamp_float((speedNow - baseSpeed) / (speedMax - baseSpeed), 0.0F, 1.0F);
+        float highSpeedInputDamp = MathHelper.clamp_float((aggressiveProfile ? 0.86F : 0.68F) - speedNorm * (aggressiveProfile ? 0.16F : 0.10F), aggressiveProfile ? 0.54F : 0.46F, aggressiveProfile ? 0.86F : 0.68F);
+        float lowSpeedPitchProtect = MathHelper.clamp_float(0.42F + speedNorm * 0.68F, 0.42F, 1.0F);
+        float lowSpeedRollProtect = MathHelper.clamp_float(0.72F + speedNorm * 0.28F, 0.72F, 1.0F);
+        float lowSpeedYawProtect = MathHelper.clamp_float(0.64F + speedNorm * 0.36F, 0.64F, 1.0F);
+        boolean quatActive = this.isWTQuaternionAnglesActive();
+        if (quatActive) {
+            lowSpeedPitchProtect = Math.max(lowSpeedPitchProtect, aggressiveProfile ? 0.75F : 0.68F);
+        }
+        // Fast start: larger input gain so the aim marker responds immediately.
+        float inputDiv = aggressiveProfile ? 44.0F : 64.0F;
+        float inputClamp = aggressiveProfile ? 0.10F : 0.06F;
+        float inputX = MathHelper.clamp_float(mouseX / inputDiv, -inputClamp, inputClamp) * highSpeedInputDamp;
+        float inputY = MathHelper.clamp_float(mouseY / inputDiv, -inputClamp, inputClamp) * highSpeedInputDamp;
+        this.wtAimTargetX = MathHelper.clamp_float(this.wtAimTargetX + inputX, -1.0F, 1.0F);
+        this.wtAimTargetY = MathHelper.clamp_float(this.wtAimTargetY + inputY, -1.0F, 1.0F);
+
+        // Adaptive recenter with a critically-damped spring: faster and cleaner return-to-center.
+        float inputActivity = MathHelper.clamp_float((MathHelper.abs(mouseX) + MathHelper.abs(mouseY)) / 24.0F, 0.0F, 1.0F);
+        float dt = MathHelper.clamp_float(0.05F * partialTicks, 0.02F, 0.08F);
+        float springNoInput = aggressiveProfile ? 22.0F : 28.0F;
+        float springWithInput = aggressiveProfile ? 8.0F : 6.0F;
+        float springK = springNoInput + (springWithInput - springNoInput) * inputActivity;
+        float dampingRatio = aggressiveProfile ? 0.95F : 1.02F;
+        float springC = 2.0F * MathHelper.sqrt_float(springK) * dampingRatio;
+
+        this.wtAimVelX += (-springK * this.wtAimTargetX - springC * this.wtAimVelX) * dt;
+        this.wtAimVelY += (-springK * this.wtAimTargetY - springC * this.wtAimVelY) * dt;
+        this.wtAimTargetX += this.wtAimVelX * dt;
+        this.wtAimTargetY += this.wtAimVelY * dt;
+        this.wtAimTargetX = MathHelper.clamp_float(this.wtAimTargetX, -1.0F, 1.0F);
+        this.wtAimTargetY = MathHelper.clamp_float(this.wtAimTargetY, -1.0F, 1.0F);
+        if (MathHelper.abs(this.wtAimTargetX) >= 0.999F && this.wtAimVelX * this.wtAimTargetX > 0.0F) {
+            this.wtAimVelX = 0.0F;
+        }
+        if (MathHelper.abs(this.wtAimTargetY) >= 0.999F && this.wtAimVelY * this.wtAimTargetY > 0.0F) {
+            this.wtAimVelY = 0.0F;
+        }
+        if (inputActivity < 0.05F && MathHelper.abs(this.wtAimTargetX) < 0.010F && MathHelper.abs(this.wtAimVelX) < 0.025F) {
+            this.wtAimTargetX = 0.0F;
+            this.wtAimVelX = 0.0F;
+        }
+        if (inputActivity < 0.05F && MathHelper.abs(this.wtAimTargetY) < 0.010F && MathHelper.abs(this.wtAimVelY) < 0.025F) {
+            this.wtAimTargetY = 0.0F;
+            this.wtAimVelY = 0.0F;
+        }
+        float recenter = springK * dt;
+
+        float alphaBase = aggressiveProfile ? 0.32F : 0.24F;
+        float alphaScale = aggressiveProfile ? 0.21F : 0.15F;
+        float alpha = MathHelper.clamp_float(alphaBase + partialTicks * alphaScale, alphaBase, aggressiveProfile ? 0.66F : 0.52F);
+        this.wtAimNormX += (this.wtAimTargetX - this.wtAimNormX) * alpha;
+        this.wtAimNormY += (this.wtAimTargetY - this.wtAimNormY) * alpha;
+        this.updateWTPseudoFreeLookCameraOffset(aggressiveProfile, alpha);
+
+        float absX = MathHelper.abs(this.wtAimNormX);
+        float absY = MathHelper.abs(this.wtAimNormY);
+        float errMag = MathHelper.clamp_float(MathHelper.sqrt_float(this.wtAimNormX * this.wtAimNormX + this.wtAimNormY * this.wtAimNormY), 0.0F, 1.0F);
+        float rollTargetScale = (aggressiveProfile ? 72.0F : 62.0F) + (aggressiveProfile ? 18.0F : 14.0F) * absX;
+        float rollLimitBySpeed = MathHelper.clamp_float(54.0F + speedNorm * 38.0F, 54.0F, 92.0F);
+        float desiredRollByX = MathHelper.clamp_float(this.wtAimNormX * rollTargetScale, -rollLimitBySpeed, rollLimitBySpeed);
+        float alignRoll = (float) Math.toDegrees(Math.atan2(this.wtAimNormX, absY + 0.15F));
+        float desiredRollByDirection = MathHelper.clamp_float(alignRoll * (0.95F + errMag * 0.30F), -rollLimitBySpeed, rollLimitBySpeed);
+        // Only enable geometry alignment when target is far from screen center.
+        float alignDeadZone = aggressiveProfile ? 0.18F : 0.24F;
+        float alignFullZone = aggressiveProfile ? 0.62F : 0.68F;
+        float alignWeight = MathHelper.clamp_float((errMag - alignDeadZone) / (alignFullZone - alignDeadZone), 0.0F, 1.0F);
+        float desiredRoll = desiredRollByX + (desiredRollByDirection - desiredRollByX) * alignWeight;
+        float bankRatio = MathHelper.clamp_float(MathHelper.abs(this.getRotRoll()) / Math.max(rollLimitBySpeed, 1.0F), 0.0F, 1.0F);
+        float yawWeight = MathHelper.clamp_float(0.86F - bankRatio * 0.90F, 0.06F, 0.86F);
+        MCH_AircraftInfo acInfo = this.getAcInfo();
+        float mobilityRoll = acInfo != null ? acInfo.mobilityRoll : 2.39F;
+        float mobilityRollGain = MathHelper.clamp_float(mobilityRoll / 2.39F, 0.75F, 1.35F);
+        float lateralDemand = MathHelper.abs(this.wtAimNormX);
+        float adLikeWeight = MathHelper.clamp_float((lateralDemand - 0.08F) / 0.36F, 0.0F, 1.0F);
+        float yawCmd = this.wtAimNormX * (aggressiveProfile ? 22.0F : 15.0F) * yawWeight * lowSpeedYawProtect;
+        float pitchGain = (aggressiveProfile ? 44.0F : 30.0F) + absX * bankRatio * (aggressiveProfile ? 10.0F : 6.0F);
+        float pitchCmd = this.wtAimNormY * pitchGain * lowSpeedPitchProtect;
+        float rollErr = MathHelper.wrapAngleTo180_float(desiredRoll - this.getRotRoll());
+        float adLikeRollCmd = this.wtAimNormX * (aggressiveProfile ? 52.0F : 40.0F) * mobilityRollGain * adLikeWeight;
+        float rollCmd = (rollErr * (aggressiveProfile ? 1.92F : 1.58F) + this.wtAimNormX * (aggressiveProfile ? 34.0F : 26.0F) + adLikeRollCmd) * lowSpeedRollProtect;
+        float manualRollInput = 0.0F;
+        if (super.moveLeft && !super.moveRight) {
+            manualRollInput = -1.0F;
+        } else if (super.moveRight && !super.moveLeft) {
+            manualRollInput = 1.0F;
+        }
+        if (manualRollInput != 0.0F) {
+            float manualRollCmd = manualRollInput * (aggressiveProfile ? 86.0F : 72.0F) * mobilityRollGain;
+            rollCmd = manualRollCmd;
+        }
+        float rollFirstWeight = MathHelper.clamp_float((MathHelper.abs(rollErr) - (aggressiveProfile ? 14.0F : 18.0F)) / (aggressiveProfile ? 26.0F : 34.0F), 0.0F, 1.0F) * adLikeWeight;
+        float absPitchNow = MathHelper.abs(MathHelper.wrapAngleTo180_float(this.getRotPitch()));
+        float highPitchStart = aggressiveProfile ? 66.0F : 72.0F;
+        float highPitchEnd = 88.0F;
+        float highPitchWeight = MathHelper.clamp_float((absPitchNow - highPitchStart) / (highPitchEnd - highPitchStart), 0.0F, 1.0F);
+        float pullUpWeight = quatActive ? MathHelper.clamp_float((MathHelper.abs(this.wtAimNormY) - 0.45F) / 0.45F, 0.0F, 1.0F) : 0.0F;
+        float pitchPriorityWeight = Math.max(highPitchWeight, pullUpWeight);
+        float rollFirstSuppression = 1.0F - pitchPriorityWeight * 0.80F;
+        rollFirstWeight *= rollFirstSuppression;
+        float rollFirstPitchScale = 1.0F - rollFirstWeight * 0.65F;
+        if (rollFirstPitchScale < 0.35F) {
+            rollFirstPitchScale = 0.35F;
+        }
+        if (quatActive && MathHelper.abs(this.wtAimNormY) > 0.55F) {
+            rollFirstPitchScale = Math.max(rollFirstPitchScale, 0.88F);
+        }
+        float pitchBoostScale = 1.0F + pitchPriorityWeight * (aggressiveProfile ? 0.55F : 0.45F);
+        pitchCmd *= rollFirstPitchScale;
+        pitchCmd *= pitchBoostScale;
+        float rollPitchCutScale = 1.0F - pitchPriorityWeight * (aggressiveProfile ? 0.58F : 0.50F);
+        if (rollPitchCutScale < 0.35F) {
+            rollPitchCutScale = 0.35F;
+        }
+        rollCmd *= rollPitchCutScale;
+        yawCmd *= (1.0F - rollFirstWeight * 0.50F);
+        yawCmd *= (1.0F - pitchPriorityWeight * 0.25F);
+
+        this.wtYawCmd = MathHelper.clamp_float(yawCmd, aggressiveProfile ? -40.0F : -28.0F, aggressiveProfile ? 40.0F : 28.0F);
+        float pitchLimit = quatActive ? (aggressiveProfile ? 126.0F : 102.0F) : (aggressiveProfile ? 74.0F : 56.0F);
+        if (quatActive) {
+            pitchLimit += pitchPriorityWeight * (aggressiveProfile ? 24.0F : 20.0F);
+        }
+        this.wtPitchCmd = MathHelper.clamp_float(pitchCmd, -pitchLimit, pitchLimit);
+        this.wtRollCmd = MathHelper.clamp_float(rollCmd, aggressiveProfile ? -118.0F : -92.0F, aggressiveProfile ? 118.0F : 92.0F);
+
+        if (super.ticksExisted % 8 == 0) {
+            float mobilityYaw = acInfo != null ? acInfo.mobilityYaw : 0.0F;
+            float mobilityPitch = acInfo != null ? acInfo.mobilityPitch : 0.0F;
+            float motionFactor = acInfo != null ? acInfo.motionFactor : 0.0F;
+            MCH_MouseAimDebug.trace(
+                super.worldObj,
+                this.getRiddenByEntity(),
+                "plane=%s active=%s profile=%s quat=(active=%s,inited=%s,w=%.4f,x=%.4f,y=%.4f,z=%.4f) thirdPerson=%d mouse=(%.2f,%.2f) target=(%.3f,%.3f) smooth=(%.3f,%.3f) ctrl=(desiredRoll=%.2f,rollX=%.2f,rollDir=%.2f,alignW=%.3f,adW=%.3f,rollFirst=%.3f,rollLimit=%.2f,bank=%.3f,yawW=%.3f,pPri=%.3f,pHi=%.3f,pPull=%.3f,pBoost=%.3f,rCut=%.3f,pLim=%.2f,recenter=%.4f,alpha=%.3f,activity=%.3f,speedNorm=%.3f,inputDamp=%.3f,lp=%.3f,lr=%.3f,ly=%.3f) cmd=(yaw=%.2f,pitch=%.2f,roll=%.2f) rot=(yaw=%.2f,pitch=%.2f,roll=%.2f) factor=(yaw=%.2f,pitch=%.2f,roll=%.2f) mobility=(yaw=%.2f,pitch=%.2f,roll=%.2f) motionFactor=%.4f throttle=%.3f speed=%.3f",
+                this.getEntityName(),
+                Boolean.valueOf(this.isWTMouseAimActive()),
+                aggressiveProfile ? "aggressive" : "normal",
+                Boolean.valueOf(quatActive),
+                Boolean.valueOf(this.wtQuatInited),
+                Float.valueOf(this.wtQuatW),
+                Float.valueOf(this.wtQuatX),
+                Float.valueOf(this.wtQuatY),
+                Float.valueOf(this.wtQuatZ),
+                Integer.valueOf(MCH_MOD.proxy.getThirdPersonViewType()),
+                Float.valueOf(mouseX),
+                Float.valueOf(mouseY),
+                Float.valueOf(this.wtAimTargetX),
+                Float.valueOf(this.wtAimTargetY),
+                Float.valueOf(this.wtAimNormX),
+                Float.valueOf(this.wtAimNormY),
+                Float.valueOf(desiredRoll),
+                Float.valueOf(desiredRollByX),
+                Float.valueOf(desiredRollByDirection),
+                Float.valueOf(alignWeight),
+                Float.valueOf(adLikeWeight),
+                Float.valueOf(rollFirstWeight),
+                Float.valueOf(rollLimitBySpeed),
+                Float.valueOf(bankRatio),
+                Float.valueOf(yawWeight),
+                Float.valueOf(pitchPriorityWeight),
+                Float.valueOf(highPitchWeight),
+                Float.valueOf(pullUpWeight),
+                Float.valueOf(pitchBoostScale),
+                Float.valueOf(rollPitchCutScale),
+                Float.valueOf(pitchLimit),
+                Float.valueOf(recenter),
+                Float.valueOf(alpha),
+                Float.valueOf(inputActivity),
+                Float.valueOf(speedNorm),
+                Float.valueOf(highSpeedInputDamp),
+                Float.valueOf(lowSpeedPitchProtect),
+                Float.valueOf(lowSpeedRollProtect),
+                Float.valueOf(lowSpeedYawProtect),
+                Float.valueOf(this.wtYawCmd),
+                Float.valueOf(this.wtPitchCmd),
+                Float.valueOf(this.wtRollCmd),
+                Float.valueOf(this.getRotYaw()),
+                Float.valueOf(this.getRotPitch()),
+                Float.valueOf(this.getRotRoll()),
+                Float.valueOf(this.getYawFactor()),
+                Float.valueOf(this.getPitchFactor()),
+                Float.valueOf(this.getRollFactor()),
+                Float.valueOf(mobilityYaw),
+                Float.valueOf(mobilityPitch),
+                Float.valueOf(mobilityRoll),
+                Float.valueOf(motionFactor),
+                Float.valueOf((float) this.getCurrentThrottle()),
+                Float.valueOf((float) super.currentSpeed)
+            );
+        }
+    }
+
+    @SideOnly(Side.CLIENT)
+    private void resetWTMouseAimState() {
+        this.wtLastControlTick = -1;
+        this.wtAimNormX = 0.0F;
+        this.wtAimNormY = 0.0F;
+        this.wtAimTargetX = 0.0F;
+        this.wtAimTargetY = 0.0F;
+        this.wtAimVelX = 0.0F;
+        this.wtAimVelY = 0.0F;
+        this.wtYawCmd = 0.0F;
+        this.wtPitchCmd = 0.0F;
+        this.wtRollCmd = 0.0F;
+        this.wtCamYawOffset = 0.0F;
+        this.wtCamPitchOffset = 0.0F;
+        this.wtQuatW = 1.0F;
+        this.wtQuatX = 0.0F;
+        this.wtQuatY = 0.0F;
+        this.wtQuatZ = 0.0F;
+        this.wtQuatInited = false;
+        this.wtQuatPrevYaw = this.getRotYaw();
+        this.wtQuatPrevPitch = this.getRotPitch();
+        this.wtQuatPrevRoll = this.getRotRoll();
+    }
+
+    @SideOnly(Side.CLIENT)
+    private void updateWTPseudoFreeLookCameraOffset(boolean aggressiveProfile, float alpha) {
+        if (!this.isWTPseudoFreeLookCameraActive()) {
+            this.wtCamYawOffset = 0.0F;
+            this.wtCamPitchOffset = 0.0F;
+            return;
+        }
+        float yawLimit = MathHelper.clamp_float((float) MCH_Config.MouseAimPlanePseudoFreeLookYawLimit.prmDouble, 0.0F, 120.0F);
+        float pitchLimit = MathHelper.clamp_float((float) MCH_Config.MouseAimPlanePseudoFreeLookPitchLimit.prmDouble, 0.0F, 60.0F);
+        float targetYaw = MathHelper.clamp_float(this.wtAimNormX * yawLimit, -yawLimit, yawLimit);
+        float targetPitch = MathHelper.clamp_float(-this.wtAimNormY * pitchLimit, -pitchLimit, pitchLimit);
+        float camAlpha = MathHelper.clamp_float((aggressiveProfile ? 0.25F : 0.20F) + alpha * 0.35F, 0.20F, 0.72F);
+        this.wtCamYawOffset += (targetYaw - this.wtCamYawOffset) * camAlpha;
+        this.wtCamPitchOffset += (targetPitch - this.wtCamPitchOffset) * camAlpha;
     }
 
     private void rotationByKey(float partialTicks) {
@@ -331,7 +781,7 @@ public class MCP_EntityPlane extends MCH_EntityAircraft {
             if (this.getNozzleRotation() > 0.001F) {
                 rot = 1.0F - 0.03F * partialTicks;
                 this.setRotPitch(this.getRotPitch() * rot);
-                rot = 1.0F - 0.1F * partialTicks;
+                rot = this.isWTMouseAimActive() && this.getVtolMode() == 0 ? 1.0F - 0.03F * partialTicks : 1.0F - 0.1F * partialTicks;
                 this.setRotRoll(this.getRotRoll() * rot);
             }
 
