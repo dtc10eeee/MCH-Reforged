@@ -90,6 +90,28 @@ public abstract class MCH_EntityBaseBullet extends W_Entity implements MCH_IChun
     private MCH_BulletModel model;
     private ForgeChunkManager.Ticket chunkLoaderTicket;
     private List<ChunkCoordIntPair> loadedChunks = new ArrayList<>();
+    private boolean useDirectChunkLoading = false;
+    private static boolean bfmcCoreDetected = false;
+    private static boolean bfmcCoreChecked = false;
+    public static boolean debugChunkLoading = false;
+    private static java.io.PrintWriter debugLogWriter = null;
+
+    private static void writeDebugLog(String msg) {
+        try {
+            if (debugLogWriter == null) {
+                debugLogWriter = new java.io.PrintWriter(new java.io.FileWriter("missile_debug.log", true));
+                debugLogWriter.println("=== MCHeli Missile Debug Log ===");
+                debugLogWriter.println("=== Started at " + new java.util.Date() + " ===");
+                debugLogWriter.flush();
+            }
+            debugLogWriter.println(msg);
+            debugLogWriter.flush();
+        } catch (Exception ignored) {}
+    }
+
+    public static void closeDebugLog() {
+        try { if (debugLogWriter != null) { debugLogWriter.close(); debugLogWriter = null; } } catch (Exception ignored) {}
+    }
     private double airburstTravelled = 0.0D;
     private boolean airburstTriggered = false;
     private boolean aheadTriggered = false;
@@ -237,6 +259,39 @@ public abstract class MCH_EntityBaseBullet extends W_Entity implements MCH_IChun
         }
     }
 
+    private static boolean isBFMCCoreLoaded() {
+        if (bfmcCoreChecked) return bfmcCoreDetected;
+        bfmcCoreChecked = true;
+        try {
+            Class<?> bukkitClass = Class.forName("org.bukkit.Bukkit");
+            Object pluginManager = bukkitClass.getMethod("getPluginManager").invoke(null);
+            Object plugin = pluginManager.getClass().getMethod("getPlugin", String.class).invoke(pluginManager, "BFMCCore");
+            bfmcCoreDetected = plugin != null;
+        } catch (Exception e) {
+            bfmcCoreDetected = false;
+        }
+        return bfmcCoreDetected;
+    }
+
+    public void loadChunksDirectly(int chunkX, int chunkZ, double motionX, double motionZ) {
+        if (worldObj.isRemote) return;
+
+        int loaded = 0;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                worldObj.getChunkFromChunkCoords(chunkX + dx, chunkZ + dz);
+                loaded++;
+            }
+        }
+        if (debugChunkLoading && this.ticksExisted % 20 == 0) {
+            writeDebugLog("[MCH_Debug] Missile #" + this.getEntityId() + " type=" + this.getName()
+                + " pos=" + (int)posX + "," + (int)posY + "," + (int)posZ
+                + " chunk=" + chunkX + "," + chunkZ
+                + " loaded25=" + loaded
+                + " tick=" + this.ticksExisted);
+        }
+    }
+
     public void setLocationAndAngles(double par1, double par3, double par5, float par7, float par8) {
         super.setLocationAndAngles(par1, par3, par5, par7, par8);
         this.prevPosX2 = par1;
@@ -309,7 +364,16 @@ public abstract class MCH_EntityBaseBullet extends W_Entity implements MCH_IChun
             this.accelerationFactor = this.getInfo().acceleration / 4.0F;
         }
         if (getInfo() != null && getInfo().enableChunkLoader) {
-            init(ForgeChunkManager.requestTicket(MCH_MOD.instance, worldObj, ForgeChunkManager.Type.ENTITY));
+            if (!worldObj.isRemote && isBFMCCoreLoaded()) {
+                useDirectChunkLoading = true;
+                if (debugChunkLoading) {
+                    writeDebugLog("[MCH_Debug] Missile #" + this.getEntityId() + " SPAWN type=" + this.getName()
+                        + " pos=" + (int)posX + "," + (int)posY + "," + (int)posZ
+                        + " mode=DIRECT_CHUNK_LOADING");
+                }
+            } else {
+                init(ForgeChunkManager.requestTicket(MCH_MOD.instance, worldObj, ForgeChunkManager.Type.ENTITY));
+            }
         }
     }
 
@@ -935,7 +999,13 @@ public abstract class MCH_EntityBaseBullet extends W_Entity implements MCH_IChun
         }
 
         if (getInfo() != null && getInfo().enableChunkLoader) {
-            checkAndLoadChunks();
+            if (useDirectChunkLoading) {
+                int cx = MathHelper.floor_double(posX) >> 4;
+                int cz = MathHelper.floor_double(posZ) >> 4;
+                loadChunksDirectly(cx, cz, motionX, motionZ);
+            } else {
+                checkAndLoadChunks();
+            }
         }
 
         //更新锁定的目标
